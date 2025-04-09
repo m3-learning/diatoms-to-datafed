@@ -20,24 +20,31 @@ flowchart TD
             F -->|True| G
             G --> H[extract Metadata]
             B --> H
-            task[task id]
+            
         end
 
         subgraph Globus
             style Globus fill:#ffccff,stroke:#333,stroke-width:2px
             H --> globus[Globus DataTransfer]
+            G --> globus[Globus DataTransfer]
+            
         end
     end
 
-    globus --> repo[DataFed Repository]
-
     subgraph DataFed_API
-        direction LR
+        globus --> repo[DataFed Repository]
         style DataFed_API fill:#ffffcc,stroke:#333,stroke-width:2px
         H --> datafed1[DataFed dataCreate Command]
+        H --> G
+        repo --> datafed1
         G --> datafed2[DataFed dataPut Command]
+        datafed1 --> datafed2[DataFed dataPut Command]
     end
 
-    %% Explicit cross-subgraph arrow from dataPut Command to task id in Docker Container
-    datafed2 --> task
+    subgraph View Details
+    task[task id]
+    progress[task progress]
+    datafed2 --> progress 
+    progress --> task 
+    end
 ```
