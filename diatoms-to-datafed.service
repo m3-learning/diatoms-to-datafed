@@ -1,0 +1,15 @@
+[Unit]
+Description=Diatoms to DataFed Service
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/path/to/diatoms-to-datafed
+Environment="PATH=/path/to/diatoms-to-datafed/venv/bin"
+ExecStart=/path/to/diatoms-to-datafed/venv/bin/diatoms-to-datafed
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target 

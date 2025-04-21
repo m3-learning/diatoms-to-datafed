@@ -1,0 +1,6 @@
+datafed>=1.0.0
+schedule>=1.1.0
+docker>=5.0.0
+pyyaml>=6.0
+pathlib>=1.0.1
+typing-extensions>=4.0.0 

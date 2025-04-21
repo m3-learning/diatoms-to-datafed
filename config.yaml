@@ -1,0 +1,17 @@
+# Watch directory where microscope saves files
+watch_directory: "/path/to/microscope/data"
+
+# Log files configuration
+log_file: "logs/processed_files.json"
+
+# DataFed configuration
+datafed:
+  repo_id: "your-repo-id"  # Replace with your actual DataFed repository ID
+  parent_collection: "root"
+  default_tags: ["microscope", "volume"]
+
+# Logging configuration
+logging:
+  level: "INFO"
+  file: "logs/diatoms_to_datafed.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s" 
