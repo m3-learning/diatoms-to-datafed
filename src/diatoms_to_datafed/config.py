@@ -7,7 +7,7 @@ from typing import Dict, Any
 
 # Default configuration
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "watch_directory": "/path/to/watch",
+    "watch_directory": "E:/globus_data",
     "log_file": "logs/processed_files.json",
     "datafed": {
         "repo_id": "repository-id",

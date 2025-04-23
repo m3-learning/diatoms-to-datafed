@@ -1,12 +1,12 @@
 # Watch directory where microscope saves files
-watch_directory: "/path/to/microscope/data"
+watch_directory: "E:/globus_data"
 
 # Log files configuration
 log_file: "logs/processed_files.json"
 
 # DataFed configuration
 datafed:
-  repo_id: "your-repo-id"  # Replace with your actual DataFed repository ID
+  repo_id: "p/test-automation"  # Replace with your actual DataFed repository ID
   parent_collection: "root"
   default_tags: ["microscope", "volume"]
 
