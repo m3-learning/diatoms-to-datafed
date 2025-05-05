@@ -1,0 +1,49 @@
+# Globus Connect/globus container
+FROM rockylinux:9
+
+VOLUME /home/gridftp/globus_config
+VOLUME /home/gridftp/data 
+
+# Install necessary packages
+RUN yum -y update && \
+    yum -y install wget rsync openssh-clients python pip && \
+    yum -y install epel-release && \
+    yum -y update && \
+    dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+    pip3 install --upgrade globus-cli && \
+    yum install dos2unix -y && \
+    adduser gridftp
+
+# Copy scripts first and fix line endings
+COPY globus-connect-personal.sh /home/gridftp/globus-connect-personal.sh
+COPY initialization.sh /home/gridftp/initialization.sh
+COPY entrypoint.sh /home/gridftp/entrypoint.sh
+
+# Convert to Unix format
+RUN dos2unix /home/gridftp/globus-connect-personal.sh
+RUN dos2unix /home/gridftp/initialization.sh
+RUN dos2unix /home/gridftp/entrypoint.sh
+
+RUN cd /root && \
+    wget https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz && \
+    tar xzvf /root/globusconnectpersonal-latest.tgz -C /home/gridftp && \
+    chown -R gridftp.gridftp /home/gridftp/globus*
+
+# Create directories and adjust permissions
+RUN mkdir -p /home/gridftp/globus_config/.globus && \
+    mkdir -p /home/gridftp/globus_config/.globusonline && \
+    mkdir -p /home/gridftp/data && \
+    chown -R gridftp:gridftp /home/gridftp/globus_config && \
+    chown -R gridftp:gridftp /home/gridftp/data && \
+    chmod -R 755 /home/gridftp/globus_config && \
+    chmod -R 755 /home/gridftp/data
+
+# Ensure scripts are executable
+RUN chmod +x /home/gridftp/initialization.sh /home/gridftp/entrypoint.sh /home/gridftp/globus-connect-personal.sh
+
+# globus-connect-server-setup script needs these
+ENV HOME=/root
+ENV TERM=xterm
+
+# Set the entrypoint script
+ENTRYPOINT ["/home/gridftp/entrypoint.sh"]

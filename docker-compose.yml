@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  globus-connect:
+    build:
+      context: .
+      dockerfile: Dockerfile.globus-connect # Ensure Dockerfile.globus-connect is in the correct path
+    container_name: globus_connect_container
+    environment:
+      - DataPath=${DataPath} # Ensure DataPath is set in the environment or .env file
+      - ConfigPath=${ConfigPath} # Ensure ConfigPath is set in the environment or .env file
+      - START_GLOBUS=true
+    volumes:
+      - "${ConfigPath}:/home/gridftp/globus_config" # Map host config path to container
+      - shared-data:/shared-data # Shared volume between services
+      - globus-data:/home/gridftp/data # Second shared volume specifically for /home/gridftp/data
+    networks:
+      - app-network
+    ports:
+      - "2811:2811" # Port mappings for Globus Connect
+      - "7512:7512"
+      - "7513:7513"
+    restart: unless-stopped # Automatically restart unless stopped manually
+
+  datafed:
+    build:
+      context: .
+      dockerfile: src/diatoms_to_datafed/Datafed_Client/Dockerfile.datafed # Ensure Dockerfile.datafed is in the correct path
+    container_name: datafed_container
+    environment:
+      - DISPLAY=${DISPLAY} # For GUI applications, ensure DISPLAY is set
+      - XAUTHORITY=/root/.Xauthority
+    ports:
+      - "5006:5006"
+    volumes:
+      - shared-data:/shared-data # Shared volume between services
+      - globus-data:/home/gridftp/data # Second shared volume specifically for /home/gridftp/data
+      - /tmp/.X11-unix:/tmp/.X11-unix # Necessary for X11 forwarding
+      - "${HOME}/.Xauthority:/root/.Xauthority:rw" # Ensure .Xauthority is present in the host home directory
+    networks:
+      - app-network # Using host network mode for direct network access
+    tty: true # Allocate a pseudo-TTY for the container
+    stdin_open: true # Keep STDIN open to interact with the container
+    restart: unless-stopped # Automatically restart unless stopped manually
+
+volumes:
+  shared-data:
+    driver: local # Using local volume driver for shared-data
+  globus-data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DataPath}
+      o: bind
+
+networks:
+  app-network:
+    driver: bridge # Using bridge network driver for inter-container communication

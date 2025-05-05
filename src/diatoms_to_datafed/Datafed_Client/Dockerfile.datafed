@@ -1,0 +1,74 @@
+# FROM ubuntu:noble
+
+# RUN apt-get update && apt-get install -y x11-apps
+
+
+# CMD ["xeyes"]
+
+# Use a base image with the required glibc version
+FROM ubuntu:jammy
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install necessary dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    libgl1 \
+    libgl1-mesa-glx 
+
+# This fix: libGL error: No matching fbConfigs or visuals found
+ENV LIBGL_ALWAYS_INDIRECT=1
+
+# Install Miniconda
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+    bash /tmp/miniconda.sh -b -p /opt/conda && \
+    rm /tmp/miniconda.sh
+
+# Add conda to PATH
+ENV PATH=/opt/conda/bin:$PATH
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the Datafed_Client directory contents to the container
+COPY ./src/diatoms_to_datafed/Datafed_Client/. .
+
+# Create and activate the conda environment
+RUN conda create -n datafed python=3.11 pyqt -y \
+    && echo "source activate datafed" > ~/.bashrc
+ENV PATH /opt/conda/envs/datafed/bin:$PATH
+
+# Install the dependencies from requirements.txt
+RUN /opt/conda/envs/datafed/bin/pip install --no-cache-dir -r requirements.txt
+
+# Create a user with a home directory
+RUN useradd -ms /bin/bash gridftp
+
+# Set the user to `newuser`
+USER gridftp
+
+RUN datafed setup 
+
+# Read the content of the file and set it to an environment variable
+RUN export endpoint_id=$(cat /shared-data/globus-endpoint_id.txt) \
+    && echo $endpoint_id
+
+RUN echo /shared-data/globus-endpoint_id.txt
+# Set the environment variable for the user session
+ENV endpoint_id=${endpoint_id}
+
+RUN echo "Endpoint has been set to: $endpoint_id"
+
+RUN datafed ep default set $(cat /shared-data/globus-endpoint_id.txt)  && \
+    echo "Endpoint has been set to:"$(cat /shared-data/globus-endpoint_id.txt)
+ENV ep_id=${endpoint_id}
+
+
+ENV BOKEH_ALLOW_WS_ORIGIN=0.0.0.0:5006
+ENV BOKEH_ALLOW_WS_ORIGIN=localhost:5006
+
+
+EXPOSE 5006
+
+CMD ["panel", "serve", "app.py", "--address", "0.0.0.0", "--port", "5006", "--allow-websocket-origin=localhost:5006", "--allow-websocket-origin=0.0.0.0:5006"]
