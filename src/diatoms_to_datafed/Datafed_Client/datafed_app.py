@@ -528,6 +528,11 @@ class DataFedApp(param.Parameterized):
                 # Get all files in GC directories
                 all_files = []
                 for root, dirs, files in os.walk(base_dir):
+                    # Skip $RECYCLE.BIN directory
+                    if os.path.basename(root) == "$RECYCLE.BIN":
+                        print(f"Skipping $RECYCLE.BIN directory: {root}")
+                        continue
+                        
                     # Check if the current directory starts with 'GC'
                     if os.path.basename(root).startswith('GC'):
                         print(f"Processing GC directory: {root}")
