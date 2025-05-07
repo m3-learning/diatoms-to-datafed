@@ -498,7 +498,7 @@ class DataFedApp(param.Parameterized):
         self.stop_auto_button.disabled = True
         
     def process_new_data(self):
-        """Process new data files in the base directory"""
+        """Process new data files in GC directories"""
         # Use the base directory directly
         base_dir = FILE_PATH
         print(f"Base directory: {base_dir}")
@@ -525,17 +525,23 @@ class DataFedApp(param.Parameterized):
                 processed_files = self.get_processed_files()
                 print(f"Found {len(processed_files)} previously processed files in log")
                 
-                # Get all files in the base directory (all file types)
+                # Get all files in GC directories
                 all_files = []
                 for root, dirs, files in os.walk(base_dir):
-                    for file in files:
-                        # Skip the log file itself
-                        if file == self.log_file:
-                            continue
-                        file_path = os.path.join(root, file)
-                        all_files.append(file_path)
+                    # Check if the current directory starts with 'GC'
+                    if os.path.basename(root).startswith('GC'):
+                        print(f"Processing GC directory: {root}")
+                        for file in files:
+                            # Skip the log file itself
+                            if file == self.log_file:
+                                continue
+                            file_path = os.path.join(root, file)
+                            all_files.append(file_path)
+                    else:
+                        # Skip non-GC directories
+                        continue
                 
-                print(f"Found {len(all_files)} total files in {base_dir}")
+                print(f"Found {len(all_files)} total files in GC directories")
                 
                 # Filter out already processed files
                 new_files = [f for f in all_files if os.path.basename(f) not in processed_files]
@@ -578,8 +584,8 @@ class DataFedApp(param.Parameterized):
                     self.processing_status = "Processing complete"
                     print("Completed processing batch of files")
                 else:
-                    self.processing_status = "No new files found"
-                    print("No new files found in this scan")
+                    self.processing_status = "No new files found in GC directories"
+                    print("No new files found in GC directories in this scan")
                 
                 # Wait before checking again
                 print(f"Waiting 5 seconds before next scan...")
