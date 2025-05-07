@@ -20,7 +20,7 @@ ep=''
 with open(globus_key, "r") as file:
     # Read the entire file content
     content = file.read()
-    print("Endpoint is:",content)
+    print("Endpoint is:",content, "length:",len(content))
     ep=content
 print(f'os.environ:{ep}')
 pn.extension('material')
