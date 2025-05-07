@@ -18,10 +18,10 @@ FILE_PATH = os.getenv("FILE_PATH")
 globus_key = "/shared-data/globus-endpoint_id.txt"
 ep=''
 with open(globus_key, "r") as file:
-    # Read the entire file content
-    content = file.read()
-    print("Endpoint is:",content, "length:",len(content))
-    ep=content
+    # Read the entire file content and strip whitespace
+    content = file.read().strip()
+    print("Endpoint is:", content, "length:", len(content))
+    ep = content
 print(f'os.environ:{ep}')
 pn.extension('material')
 pn.extension('jsoneditor')
