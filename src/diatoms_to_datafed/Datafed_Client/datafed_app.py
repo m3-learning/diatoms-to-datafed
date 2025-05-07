@@ -69,42 +69,47 @@ class DataFedApp(param.Parameterized):
     task_id = param.String(default="", label="Current Task ID")
     log_file = param.String(default="backup_log.json", label="Log File Path")
 
+    # New parameters for file tracking
+    processed_files_list = param.List(default=[], label="Processed Files")
+    unprocessed_files_list = param.List(default=[], label="Unprocessed Files")
+    current_processing_file = param.String(default="", label="Currently Processing")
+
     original_metadata = param.Dict(default={}, label="Original Metadata")  # To track the original metadata
     metadata_json_editor = pn.widgets.JSONEditor(name='Metadata', mode='text', width=600,)
 
     def __init__(self, **params):
         params['df_api'] = API() 
         super().__init__(**params)
-        self.login_button = pn.widgets.Button(name='Login', button_type='primary', css_classes=['bk-btn'])
+        self.login_button = pn.widgets.Button(name='Login', button_type='primary')
         self.login_button.on_click(self.toggle_login_panel)
         
-        self.create_button = pn.widgets.Button(name='Create Record', button_type='primary', css_classes=['bk-btn'])
+        self.create_button = pn.widgets.Button(name='Create Record', button_type='primary')
         self.create_button.on_click(self.create_record)
         
-        self.read_button = pn.widgets.Button(name='Read Record', button_type='primary', css_classes=['bk-btn'])
+        self.read_button = pn.widgets.Button(name='Read Record', button_type='primary')
         self.read_button.on_click(self.read_record)
         
-        self.update_button = pn.widgets.Button(name='Update Record', button_type='primary', css_classes=['bk-btn'])
+        self.update_button = pn.widgets.Button(name='Update Record', button_type='primary')
         self.update_button.on_click(self.update_record)
         self.update_button.visible = False  # Initially hidden
         
-        self.delete_button = pn.widgets.Button(name='Delete Record', button_type='danger', css_classes=['bk-btn'])
+        self.delete_button = pn.widgets.Button(name='Delete Record', button_type='danger')
         self.delete_button.on_click(self.delete_record)
         
-        self.transfer_button = pn.widgets.Button(name='Transfer Data', button_type='primary', css_classes=['bk-btn'])
+        self.transfer_button = pn.widgets.Button(name='Transfer Data', button_type='primary')
         self.transfer_button.on_click(self.transfer_data)
         
-        self.projects_button = pn.widgets.Button(name='View Projects', button_type='primary', css_classes=['bk-btn'])
+        self.projects_button = pn.widgets.Button(name='View Projects', button_type='primary')
         self.projects_button.on_click(self.get_projects)
 
-        self.logout_button = pn.widgets.Button(name='Logout', button_type='warning', css_classes=['bk-btn'])
+        self.logout_button = pn.widgets.Button(name='Logout', button_type='warning')
         self.logout_button.on_click(self.logout)
 
         # New buttons for automated processing
-        self.start_auto_button = pn.widgets.Button(name='Start Auto Processing', button_type='success', css_classes=['bk-btn'])
+        self.start_auto_button = pn.widgets.Button(name='Start Auto Processing', button_type='success')
         self.start_auto_button.on_click(self.start_auto_processing)
         
-        self.stop_auto_button = pn.widgets.Button(name='Stop Auto Processing', button_type='danger', css_classes=['bk-btn'])
+        self.stop_auto_button = pn.widgets.Button(name='Stop Auto Processing', button_type='danger')
         self.stop_auto_button.on_click(self.stop_auto_processing)
         self.stop_auto_button.disabled = True
 
@@ -127,6 +132,20 @@ class DataFedApp(param.Parameterized):
 
         # Progress status
         self.progress_status = pn.pane.Markdown("", width=600)
+
+        # Create panes for file tracking
+        self.current_file_pane = pn.pane.Markdown(
+            "### Currently Processing\n\nNo file being processed",
+            css_classes=['md-text']
+        )
+        self.processed_files_pane = pn.pane.Markdown(
+            "### Processed Files\n\nNo files processed yet",
+            css_classes=['md-text']
+        )
+        self.unprocessed_files_pane = pn.pane.Markdown(
+            "### Files to Process\n\nNo files in queue",
+            css_classes=['md-text']
+        )
 
     def initial_login_check(self):
         try:
@@ -497,6 +516,32 @@ class DataFedApp(param.Parameterized):
         self.start_auto_button.disabled = False
         self.stop_auto_button.disabled = True
         
+    def update_file_tracking_panes(self):
+        """Update the file tracking panes with current status"""
+        # Update current file pane
+        if self.current_processing_file:
+            self.current_file_pane.object = f"### Currently Processing\n\n**File:** {os.path.basename(self.current_processing_file)}\n\n**Progress:** {self.progress}%"
+        else:
+            self.current_file_pane.object = "### Currently Processing\n\nNo file being processed"
+
+        # Update processed files pane
+        if self.processed_files_list:
+            processed_text = "### Processed Files\n\n"
+            for file in self.processed_files_list[-10:]:  # Show last 10 files
+                processed_text += f"✅ {os.path.basename(file)}\n"
+            self.processed_files_pane.object = processed_text
+        else:
+            self.processed_files_pane.object = "### Processed Files\n\nNo files processed yet"
+
+        # Update unprocessed files pane
+        if self.unprocessed_files_list:
+            unprocessed_text = "### Files to Process\n\n"
+            for file in self.unprocessed_files_list[:10]:  # Show next 10 files
+                unprocessed_text += f"⏳ {os.path.basename(file)}\n"
+            self.unprocessed_files_pane.object = unprocessed_text
+        else:
+            self.unprocessed_files_pane.object = "### Files to Process\n\nNo files in queue"
+
     def process_new_data(self):
         """Process new data files in GC directories"""
         # Use the base directory directly
@@ -523,6 +568,7 @@ class DataFedApp(param.Parameterized):
             while self.auto_processing:
                 # Read the log file to get processed files
                 processed_files = self.get_processed_files()
+                self.processed_files_list = processed_files
                 print(f"Found {len(processed_files)} previously processed files in log")
                 
                 # Get all files in GC directories
@@ -550,6 +596,7 @@ class DataFedApp(param.Parameterized):
                 
                 # Filter out already processed files
                 new_files = [f for f in all_files if os.path.basename(f) not in processed_files]
+                self.unprocessed_files_list = [os.path.basename(f) for f in new_files]
                 
                 print(f"Found {len(new_files)} new unprocessed files")
                 for f in new_files[:5]:  # Print up to 5 examples
@@ -568,9 +615,13 @@ class DataFedApp(param.Parameterized):
                             
                         filename = os.path.basename(file_path)
                         self.current_file = filename
+                        self.current_processing_file = filename
                         self.processing_status = f"Processing {filename}"
                         print(f"Processing file {idx+1}/{len(new_files)}: {filename}")
                         self.progress = int((idx / self.total_files) * 100)
+                        
+                        # Update the file tracking panes
+                        self.update_file_tracking_panes()
                         
                         # Process the file
                         success = self.process_single_file(file_path)
@@ -579,18 +630,30 @@ class DataFedApp(param.Parameterized):
                             print(f"Successfully processed: {filename}")
                             # Add to processed files log
                             self.add_to_processed_log(filename)
+                            # Update processed files list
+                            self.processed_files_list.append(filename)
+                            # Remove from unprocessed files list
+                            if filename in self.unprocessed_files_list:
+                                self.unprocessed_files_list.remove(filename)
                         else:
                             print(f"Failed to process: {filename}")
+                        
+                        # Update the file tracking panes again
+                        self.update_file_tracking_panes()
                         
                         # Small delay to prevent overwhelming the system
                         time.sleep(1)
                     
                     self.progress = 100
                     self.processing_status = "Processing complete"
+                    self.current_processing_file = ""
                     print("Completed processing batch of files")
                 else:
                     self.processing_status = "No new files found in GC directories"
                     print("No new files found in GC directories in this scan")
+                
+                # Update the file tracking panes one last time
+                self.update_file_tracking_panes()
                 
                 # Wait before checking again
                 print(f"Waiting 5 seconds before next scan...")
