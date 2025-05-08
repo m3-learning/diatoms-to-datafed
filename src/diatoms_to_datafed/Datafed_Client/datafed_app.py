@@ -542,126 +542,6 @@ class DataFedApp(param.Parameterized):
         else:
             self.unprocessed_files_pane.object = "### Files to Process\n\nNo files in queue"
 
-    def process_new_data(self):
-        """Process new data files in GC directories"""
-        # Use the base directory directly
-        base_dir = FILE_PATH
-        print(f"Base directory: {base_dir}")
-        
-        try:
-            # Create log file if it doesn't exist
-            log_path = os.path.join(FILE_PATH, self.log_file)
-            print(f"Log path: {log_path}")
-            
-            # Make sure the directory exists
-            log_dir = os.path.dirname(log_path)
-            if not os.path.exists(log_dir):
-                print(f"Creating log directory: {log_dir}")
-                os.makedirs(log_dir, exist_ok=True)
-                
-            if not os.path.exists(log_path):
-                print(f"Creating new log file at {log_path}")
-                with open(log_path, 'w') as f:
-                    json.dump({"processed_dirs": []}, f)
-                print(f"Created new log file at {log_path}")
-                
-            while self.auto_processing:
-                # Clean up old zip files
-                self.cleanup_old_zip_files()
-                
-                # Read the log file to get processed directories
-                processed_dirs = self.get_processed_files()
-                self.processed_files_list = processed_dirs
-                print(f"Found {len(processed_dirs)} previously processed directories in log")
-                
-                # Get all GC directories
-                gc_dirs = []
-                for root, dirs, files in os.walk(base_dir):
-                    # Skip $RECYCLE.BIN directory
-                    if os.path.basename(root) == "$RECYCLE.BIN":
-                        print(f"Skipping $RECYCLE.BIN directory: {root}")
-                        continue
-                        
-                    # Check if the current directory starts with 'GC'
-                    if os.path.basename(root).startswith('GC'):
-                        print(f"Found GC directory: {root}")
-                        gc_dirs.append(root)
-                
-                print(f"Found {len(gc_dirs)} GC directories")
-                
-                # Filter out already processed directories
-                new_dirs = [d for d in gc_dirs if os.path.basename(d) not in processed_dirs]
-                self.unprocessed_files_list = [os.path.basename(d) for d in new_dirs]
-                
-                print(f"Found {len(new_dirs)} new unprocessed directories")
-                for d in new_dirs[:5]:  # Print up to 5 examples
-                    print(f"  - {d}")
-                if len(new_dirs) > 5:
-                    print(f"  - ... and {len(new_dirs) - 5} more")
-                
-                if new_dirs:
-                    self.processing_status = f"Found {len(new_dirs)} new directories"
-                    self.total_files = len(new_dirs)
-                    self.progress = 0
-                    
-                    for idx, dir_path in enumerate(new_dirs):
-                        if not self.auto_processing:
-                            break
-                            
-                        dirname = os.path.basename(dir_path)
-                        self.current_file = dirname
-                        self.current_processing_file = dirname
-                        self.processing_status = f"Processing directory {dirname}"
-                        print(f"Processing directory {idx+1}/{len(new_dirs)}: {dirname}")
-                        self.progress = int((idx / self.total_files) * 100)
-                        
-                        # Update the file tracking panes
-                        self.update_file_tracking_panes()
-                        
-                        # Process the directory
-                        success = self.process_single_file(dir_path)
-                        
-                        if success:
-                            print(f"Successfully processed directory: {dirname}")
-                            # Add to processed directories log
-                            self.add_to_processed_log(dirname)
-                            # Update processed directories list
-                            self.processed_files_list.append(dirname)
-                            # Remove from unprocessed directories list
-                            if dirname in self.unprocessed_files_list:
-                                self.unprocessed_files_list.remove(dirname)
-                        else:
-                            print(f"Failed to process directory: {dirname}")
-                        
-                        # Update the file tracking panes again
-                        self.update_file_tracking_panes()
-                        
-                        # Small delay to prevent overwhelming the system
-                        time.sleep(1)
-                    
-                    self.progress = 100
-                    self.processing_status = "Processing complete"
-                    self.current_processing_file = ""
-                    print("Completed processing batch of directories")
-                else:
-                    self.processing_status = "No new GC directories found"
-                    print("No new GC directories found in this scan")
-                
-                # Update the file tracking panes one last time
-                self.update_file_tracking_panes()
-                
-                # Wait before checking again
-                print(f"Waiting 5 seconds before next scan...")
-                time.sleep(5)
-                
-        except Exception as e:
-            error_msg = f"Error in process_new_data: {str(e)}"
-            print(error_msg)
-            self.processing_status = f"Error: {str(e)}"
-            self.auto_processing = False
-            self.start_auto_button.disabled = False
-            self.stop_auto_button.disabled = True
-            
     def process_single_file(self, dir_path):
         """Process a single file or directory with DataFed operations"""
         try:
@@ -674,28 +554,76 @@ class DataFedApp(param.Parameterized):
             # Check if it's a directory
             if os.path.isdir(dir_path):
                 print(f"Directory detected: {dir_path}")
+                # Create temp_zips directory if it doesn't exist
+                temp_zips_dir = os.path.join(FILE_PATH, "temp_zips")
+                try:
+                    if not os.path.exists(temp_zips_dir):
+                        os.makedirs(temp_zips_dir, exist_ok=True)
+                        print(f"Created temp_zips directory: {temp_zips_dir}")
+                    
+                    # Test write permissions
+                    test_file = os.path.join(temp_zips_dir, "test_write.tmp")
+                    try:
+                        with open(test_file, 'w') as f:
+                            f.write("test")
+                        os.remove(test_file)
+                    except (IOError, PermissionError) as e:
+                        error_msg = f"Permission error: Cannot write to temp_zips directory. Please check permissions for: {temp_zips_dir}"
+                        print(error_msg)
+                        self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                        return False
+                        
+                except PermissionError as e:
+                    error_msg = f"Permission error: Cannot create temp_zips directory. Please check permissions for: {FILE_PATH}"
+                    print(error_msg)
+                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                    return False
+                except Exception as e:
+                    error_msg = f"Error creating temp_zips directory: {str(e)}"
+                    print(error_msg)
+                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                    return False
+                
                 # Create a zip file of the directory with timestamp
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_filename = f"{file_title}_{timestamp}.zip"
-                zip_path = os.path.join(os.path.dirname(dir_path), zip_filename)
+                zip_path = os.path.join(temp_zips_dir, zip_filename)
                 
-                print(f"Creating zip file: {zip_path}")
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for root, dirs, files in os.walk(dir_path):
-                        for file in files:
-                            file_full_path = os.path.join(root, file)
-                            # Calculate the relative path for the file in the zip
-                            rel_path = os.path.relpath(file_full_path, dir_path)
-                            zipf.write(file_full_path, rel_path)
-                
-                print(f"Successfully created zip file: {zip_path}")
-                # Use the zip file for further processing
-                dir_path = zip_path
-                dirname = zip_filename
-                file_title = os.path.splitext(dirname)[0]
-                
-                # Add zip file to cleanup tracking
-                self.add_to_zip_cleanup_log(zip_path)
+                try:
+                    print(f"Creating zip file: {zip_path}")
+                    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                        for root, dirs, files in os.walk(dir_path):
+                            for file in files:
+                                try:
+                                    file_full_path = os.path.join(root, file)
+                                    # Calculate the relative path for the file in the zip
+                                    rel_path = os.path.relpath(file_full_path, dir_path)
+                                    zipf.write(file_full_path, rel_path)
+                                except PermissionError as e:
+                                    print(f"Permission error accessing file {file_full_path}: {str(e)}")
+                                    continue
+                                except Exception as e:
+                                    print(f"Error processing file {file_full_path}: {str(e)}")
+                                    continue
+                    
+                    print(f"Successfully created zip file: {zip_path}")
+                    # Use the zip file for further processing
+                    dir_path = zip_path
+                    dirname = zip_filename
+                    file_title = os.path.splitext(dirname)[0]
+                    
+                    # Add zip file to cleanup tracking
+                    self.add_to_zip_cleanup_log(zip_path)
+                except PermissionError as e:
+                    error_msg = f"Permission error: Cannot create zip file. Please check permissions for: {temp_zips_dir}"
+                    print(error_msg)
+                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                    return False
+                except Exception as e:
+                    error_msg = f"Error creating zip file: {str(e)}"
+                    print(error_msg)
+                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                    return False
             
             # Try to extract metadata if possible, otherwise use basic file info
             try:
@@ -704,16 +632,27 @@ class DataFedApp(param.Parameterized):
             except Exception as e:
                 print(f"Could not extract specialized metadata: {str(e)}")
                 # Create basic metadata with file stats
-                file_stat = os.stat(dir_path)
-                metadata = {
-                    "filename": dirname,
-                    "filesize": file_stat.st_size,
-                    "modified_time": datetime.datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
-                    "created_time": datetime.datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
-                    "file_type": os.path.splitext(dirname)[1],
-                    "error": str(e)
-                }
-                print(f"Created basic metadata for {dirname}")
+                try:
+                    file_stat = os.stat(dir_path)
+                    metadata = {
+                        "filename": dirname,
+                        "filesize": file_stat.st_size,
+                        "modified_time": datetime.datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                        "created_time": datetime.datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                        "file_type": os.path.splitext(dirname)[1],
+                        "error": str(e)
+                    }
+                    print(f"Created basic metadata for {dirname}")
+                except PermissionError as e:
+                    error_msg = f"Permission error: Cannot access file metadata. Please check permissions for: {dir_path}"
+                    print(error_msg)
+                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                    return False
+                except Exception as e:
+                    error_msg = f"Error accessing file metadata: {str(e)}"
+                    print(error_msg)
+                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                    return False
                 
             # Set the context
             if self.selected_context:
@@ -734,14 +673,25 @@ class DataFedApp(param.Parameterized):
             
             # Put data
             print(f"Uploading file to DataFed: {dir_path}")
-            res = self.df_api.dataPut(
-                data_id=record_id,
-                wait=False,
-                path=dir_path
-            )
-            print(f"res: {res}")
-            self.record_output_pane.object = f"<h3>Success: Record created with ID {record_id}</h3>"
-            print(f"File upload initiated for {dirname} with record {record_id}")
+            try:
+                res = self.df_api.dataPut(
+                    data_id=record_id,
+                    wait=False,
+                    path=dir_path
+                )
+                print(f"res: {res}")
+                self.record_output_pane.object = f"<h3>Success: Record created with ID {record_id}</h3>"
+                print(f"File upload initiated for {dirname} with record {record_id}")
+            except PermissionError as e:
+                error_msg = f"Permission error: Cannot upload file to DataFed. Please check permissions for: {dir_path}"
+                print(error_msg)
+                self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                return False
+            except Exception as e:
+                error_msg = f"Error uploading file to DataFed: {str(e)}"
+                print(error_msg)
+                self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                return False
             
             return True
             
@@ -847,3 +797,123 @@ class DataFedApp(param.Parameterized):
                 
         except Exception as e:
             print(f"Error updating log file: {str(e)}")
+
+    def process_new_data(self):
+        """Process new data files in GC directories"""
+        # Use the base directory directly
+        base_dir = FILE_PATH
+        print(f"Base directory: {base_dir}")
+        
+        try:
+            # Create log file if it doesn't exist
+            log_path = os.path.join(FILE_PATH, self.log_file)
+            print(f"Log path: {log_path}")
+            
+            # Make sure the directory exists
+            log_dir = os.path.dirname(log_path)
+            if not os.path.exists(log_dir):
+                print(f"Creating log directory: {log_dir}")
+                os.makedirs(log_dir, exist_ok=True)
+                
+            if not os.path.exists(log_path):
+                print(f"Creating new log file at {log_path}")
+                with open(log_path, 'w') as f:
+                    json.dump({"processed_dirs": []}, f)
+                print(f"Created new log file at {log_path}")
+                
+            while self.auto_processing:
+                # Clean up old zip files
+                self.cleanup_old_zip_files()
+                
+                # Read the log file to get processed directories
+                processed_dirs = self.get_processed_files()
+                self.processed_files_list = processed_dirs
+                print(f"Found {len(processed_dirs)} previously processed directories in log")
+                
+                # Get all GC directories
+                gc_dirs = []
+                for root, dirs, files in os.walk(base_dir):
+                    # Skip $RECYCLE.BIN directory and temp_zips directory
+                    if os.path.basename(root) in ["$RECYCLE.BIN", "temp_zips"]:
+                        print(f"Skipping directory: {root}")
+                        continue
+                        
+                    # Check if the current directory starts with 'GC'
+                    if os.path.basename(root).startswith('GC'):
+                        print(f"Found GC directory: {root}")
+                        gc_dirs.append(root)
+                
+                print(f"Found {len(gc_dirs)} GC directories")
+                
+                # Filter out already processed directories
+                new_dirs = [d for d in gc_dirs if os.path.basename(d) not in processed_dirs]
+                self.unprocessed_files_list = [os.path.basename(d) for d in new_dirs]
+                
+                print(f"Found {len(new_dirs)} new unprocessed directories")
+                for d in new_dirs[:5]:  # Print up to 5 examples
+                    print(f"  - {d}")
+                if len(new_dirs) > 5:
+                    print(f"  - ... and {len(new_dirs) - 5} more")
+                
+                if new_dirs:
+                    self.processing_status = f"Found {len(new_dirs)} new directories"
+                    self.total_files = len(new_dirs)
+                    self.progress = 0
+                    
+                    for idx, dir_path in enumerate(new_dirs):
+                        if not self.auto_processing:
+                            break
+                            
+                        dirname = os.path.basename(dir_path)
+                        self.current_file = dirname
+                        self.current_processing_file = dirname
+                        self.processing_status = f"Processing directory {dirname}"
+                        print(f"Processing directory {idx+1}/{len(new_dirs)}: {dirname}")
+                        self.progress = int((idx / self.total_files) * 100)
+                        
+                        # Update the file tracking panes
+                        self.update_file_tracking_panes()
+                        
+                        # Process the directory
+                        success = self.process_single_file(dir_path)
+                        
+                        if success:
+                            print(f"Successfully processed directory: {dirname}")
+                            # Add to processed directories log
+                            self.add_to_processed_log(dirname)
+                            # Update processed directories list
+                            self.processed_files_list.append(dirname)
+                            # Remove from unprocessed directories list
+                            if dirname in self.unprocessed_files_list:
+                                self.unprocessed_files_list.remove(dirname)
+                        else:
+                            print(f"Failed to process directory: {dirname}")
+                        
+                        # Update the file tracking panes again
+                        self.update_file_tracking_panes()
+                        
+                        # Small delay to prevent overwhelming the system
+                        time.sleep(1)
+                    
+                    self.progress = 100
+                    self.processing_status = "Processing complete"
+                    self.current_processing_file = ""
+                    print("Completed processing batch of directories")
+                else:
+                    self.processing_status = "No new GC directories found"
+                    print("No new GC directories found in this scan")
+                
+                # Update the file tracking panes one last time
+                self.update_file_tracking_panes()
+                
+                # Wait before checking again
+                print(f"Waiting 5 seconds before next scan...")
+                time.sleep(5)
+                
+        except Exception as e:
+            error_msg = f"Error in process_new_data: {str(e)}"
+            print(error_msg)
+            self.processing_status = f"Error: {str(e)}"
+            self.auto_processing = False
+            self.start_auto_button.disabled = False
+            self.stop_auto_button.disabled = True
