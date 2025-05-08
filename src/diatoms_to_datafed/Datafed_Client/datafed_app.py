@@ -591,6 +591,19 @@ class DataFedApp(param.Parameterized):
                 
                 try:
                     print(f"Creating zip file: {zip_path}")
+                    
+                    # First, count total files for progress bar
+                    total_files = 0
+                    for root, dirs, files in os.walk(dir_path):
+                        total_files += len(files)
+                    
+                    self.processing_status = "Zipping directory..."
+                    self.total_files = total_files
+                    self.progress = 0
+                    self.current_processing_file = f"Zipping {dirname}"
+                    self.update_file_tracking_panes()
+                    
+                    processed_files = 0
                     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                         for root, dirs, files in os.walk(dir_path):
                             for file in files:
@@ -599,6 +612,13 @@ class DataFedApp(param.Parameterized):
                                     # Calculate the relative path for the file in the zip
                                     rel_path = os.path.relpath(file_full_path, dir_path)
                                     zipf.write(file_full_path, rel_path)
+                                    
+                                    # Update progress
+                                    processed_files += 1
+                                    self.progress = int((processed_files / total_files) * 100)
+                                    self.current_processing_file = f"Zipping {dirname} - {processed_files}/{total_files} files"
+                                    self.update_file_tracking_panes()
+                                    
                                 except PermissionError as e:
                                     print(f"Permission error accessing file {file_full_path}: {str(e)}")
                                     continue
@@ -614,6 +634,12 @@ class DataFedApp(param.Parameterized):
                     
                     # Add zip file to cleanup tracking
                     self.add_to_zip_cleanup_log(zip_path)
+                    
+                    # Reset progress for next stage
+                    self.progress = 0
+                    self.current_processing_file = f"Uploading {dirname}"
+                    self.update_file_tracking_panes()
+                    
                 except PermissionError as e:
                     error_msg = f"Permission error: Cannot create zip file. Please check permissions for: {temp_zips_dir}"
                     print(error_msg)
