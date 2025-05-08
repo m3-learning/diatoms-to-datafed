@@ -12,7 +12,7 @@ from util import get_file_metadata  # Import the utility function
 import threading
 import datetime
 import glob
-
+import zipfile
 load_dotenv()
 FILE_PATH = os.getenv("FILE_PATH")
 globus_key = "/shared-data/globus-endpoint_id.txt"
@@ -562,17 +562,20 @@ class DataFedApp(param.Parameterized):
             if not os.path.exists(log_path):
                 print(f"Creating new log file at {log_path}")
                 with open(log_path, 'w') as f:
-                    json.dump({"processed_files": []}, f)
+                    json.dump({"processed_dirs": []}, f)
                 print(f"Created new log file at {log_path}")
                 
             while self.auto_processing:
-                # Read the log file to get processed files
-                processed_files = self.get_processed_files()
-                self.processed_files_list = processed_files
-                print(f"Found {len(processed_files)} previously processed files in log")
+                # Clean up old zip files
+                self.cleanup_old_zip_files()
                 
-                # Get all files in GC directories
-                all_files = []
+                # Read the log file to get processed directories
+                processed_dirs = self.get_processed_files()
+                self.processed_files_list = processed_dirs
+                print(f"Found {len(processed_dirs)} previously processed directories in log")
+                
+                # Get all GC directories
+                gc_dirs = []
                 for root, dirs, files in os.walk(base_dir):
                     # Skip $RECYCLE.BIN directory
                     if os.path.basename(root) == "$RECYCLE.BIN":
@@ -581,62 +584,54 @@ class DataFedApp(param.Parameterized):
                         
                     # Check if the current directory starts with 'GC'
                     if os.path.basename(root).startswith('GC'):
-                        print(f"Processing GC directory: {root}")
-                        for file in files:
-                            # Skip the log file itself
-                            if file == self.log_file:
-                                continue
-                            file_path = os.path.join(root, file)
-                            all_files.append(file_path)
-                    else:
-                        # Skip non-GC directories
-                        continue
+                        print(f"Found GC directory: {root}")
+                        gc_dirs.append(root)
                 
-                print(f"Found {len(all_files)} total files in GC directories")
+                print(f"Found {len(gc_dirs)} GC directories")
                 
-                # Filter out already processed files
-                new_files = [f for f in all_files if os.path.basename(f) not in processed_files]
-                self.unprocessed_files_list = [os.path.basename(f) for f in new_files]
+                # Filter out already processed directories
+                new_dirs = [d for d in gc_dirs if os.path.basename(d) not in processed_dirs]
+                self.unprocessed_files_list = [os.path.basename(d) for d in new_dirs]
                 
-                print(f"Found {len(new_files)} new unprocessed files")
-                for f in new_files[:5]:  # Print up to 5 examples
-                    print(f"  - {f}")
-                if len(new_files) > 5:
-                    print(f"  - ... and {len(new_files) - 5} more")
+                print(f"Found {len(new_dirs)} new unprocessed directories")
+                for d in new_dirs[:5]:  # Print up to 5 examples
+                    print(f"  - {d}")
+                if len(new_dirs) > 5:
+                    print(f"  - ... and {len(new_dirs) - 5} more")
                 
-                if new_files:
-                    self.processing_status = f"Found {len(new_files)} new files"
-                    self.total_files = len(new_files)
+                if new_dirs:
+                    self.processing_status = f"Found {len(new_dirs)} new directories"
+                    self.total_files = len(new_dirs)
                     self.progress = 0
                     
-                    for idx, file_path in enumerate(new_files):
+                    for idx, dir_path in enumerate(new_dirs):
                         if not self.auto_processing:
                             break
                             
-                        filename = os.path.basename(file_path)
-                        self.current_file = filename
-                        self.current_processing_file = filename
-                        self.processing_status = f"Processing {filename}"
-                        print(f"Processing file {idx+1}/{len(new_files)}: {filename}")
+                        dirname = os.path.basename(dir_path)
+                        self.current_file = dirname
+                        self.current_processing_file = dirname
+                        self.processing_status = f"Processing directory {dirname}"
+                        print(f"Processing directory {idx+1}/{len(new_dirs)}: {dirname}")
                         self.progress = int((idx / self.total_files) * 100)
                         
                         # Update the file tracking panes
                         self.update_file_tracking_panes()
                         
-                        # Process the file
-                        success = self.process_single_file(file_path)
+                        # Process the directory
+                        success = self.process_single_file(dir_path)
                         
                         if success:
-                            print(f"Successfully processed: {filename}")
-                            # Add to processed files log
-                            self.add_to_processed_log(filename)
-                            # Update processed files list
-                            self.processed_files_list.append(filename)
-                            # Remove from unprocessed files list
-                            if filename in self.unprocessed_files_list:
-                                self.unprocessed_files_list.remove(filename)
+                            print(f"Successfully processed directory: {dirname}")
+                            # Add to processed directories log
+                            self.add_to_processed_log(dirname)
+                            # Update processed directories list
+                            self.processed_files_list.append(dirname)
+                            # Remove from unprocessed directories list
+                            if dirname in self.unprocessed_files_list:
+                                self.unprocessed_files_list.remove(dirname)
                         else:
-                            print(f"Failed to process: {filename}")
+                            print(f"Failed to process directory: {dirname}")
                         
                         # Update the file tracking panes again
                         self.update_file_tracking_panes()
@@ -647,10 +642,10 @@ class DataFedApp(param.Parameterized):
                     self.progress = 100
                     self.processing_status = "Processing complete"
                     self.current_processing_file = ""
-                    print("Completed processing batch of files")
+                    print("Completed processing batch of directories")
                 else:
-                    self.processing_status = "No new files found in GC directories"
-                    print("No new files found in GC directories in this scan")
+                    self.processing_status = "No new GC directories found"
+                    print("No new GC directories found in this scan")
                 
                 # Update the file tracking panes one last time
                 self.update_file_tracking_panes()
@@ -667,31 +662,58 @@ class DataFedApp(param.Parameterized):
             self.start_auto_button.disabled = False
             self.stop_auto_button.disabled = True
             
-    def process_single_file(self, file_path):
-        """Process a single file with DataFed operations"""
+    def process_single_file(self, dir_path):
+        """Process a single file or directory with DataFed operations"""
         try:
-            filename = os.path.basename(file_path)
-            file_title = os.path.splitext(filename)[0]
+            dirname = os.path.basename(dir_path)
+            file_title = os.path.splitext(dirname)[0]
+            zip_path = None  # Initialize zip_path variable
             
-            print(f"Starting to process file: {filename}")
+            print(f"Starting to process: {dirname}")
+            
+            # Check if it's a directory
+            if os.path.isdir(dir_path):
+                print(f"Directory detected: {dir_path}")
+                # Create a zip file of the directory with timestamp
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                zip_filename = f"{file_title}_{timestamp}.zip"
+                zip_path = os.path.join(os.path.dirname(dir_path), zip_filename)
+                
+                print(f"Creating zip file: {zip_path}")
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for root, dirs, files in os.walk(dir_path):
+                        for file in files:
+                            file_full_path = os.path.join(root, file)
+                            # Calculate the relative path for the file in the zip
+                            rel_path = os.path.relpath(file_full_path, dir_path)
+                            zipf.write(file_full_path, rel_path)
+                
+                print(f"Successfully created zip file: {zip_path}")
+                # Use the zip file for further processing
+                dir_path = zip_path
+                dirname = zip_filename
+                file_title = os.path.splitext(dirname)[0]
+                
+                # Add zip file to cleanup tracking
+                self.add_to_zip_cleanup_log(zip_path)
             
             # Try to extract metadata if possible, otherwise use basic file info
             try:
-                metadata = get_file_metadata(file_path)
-                print(f"Successfully extracted metadata for {filename}")
+                metadata = get_file_metadata(dir_path)
+                print(f"Successfully extracted metadata for {dirname}")
             except Exception as e:
                 print(f"Could not extract specialized metadata: {str(e)}")
                 # Create basic metadata with file stats
-                file_stat = os.stat(file_path)
+                file_stat = os.stat(dir_path)
                 metadata = {
-                    "filename": filename,
+                    "filename": dirname,
                     "filesize": file_stat.st_size,
                     "modified_time": datetime.datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
                     "created_time": datetime.datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
-                    "file_type": os.path.splitext(filename)[1],
+                    "file_type": os.path.splitext(dirname)[1],
                     "error": str(e)
                 }
-                print(f"Created basic metadata for {filename}")
+                print(f"Created basic metadata for {dirname}")
                 
             # Set the context
             if self.selected_context:
@@ -699,7 +721,7 @@ class DataFedApp(param.Parameterized):
                 print(f"Using context: {self.selected_context}")
                 
             # Create record
-            print(f"Creating DataFed record for {filename}")
+            print(f"Creating DataFed record for {dirname}")
             response = self.df_api.dataCreate(
                 title=file_title,
                 metadata=json.dumps(metadata),
@@ -711,52 +733,115 @@ class DataFedApp(param.Parameterized):
             print(f"Created record with ID: {record_id}")
             
             # Put data
-            print(f"Uploading file to DataFed: {file_path}")
+            print(f"Uploading file to DataFed: {dir_path}")
             res = self.df_api.dataPut(
                 data_id=record_id,
                 wait=False,
-                path=file_path
+                path=dir_path
             )
             print(f"res: {res}")
             self.record_output_pane.object = f"<h3>Success: Record created with ID {record_id}</h3>"
-            print(f"File upload initiated for {filename} with record {record_id}")
+            print(f"File upload initiated for {dirname} with record {record_id}")
+            
             return True
             
         except Exception as e:
-            error_msg = f"Error processing file {file_path}: {str(e)}"
+            error_msg = f"Error processing directory {dir_path}: {str(e)}"
             print(error_msg)
             self.record_output_pane.object = f"<h3>{error_msg}</h3>"
             return False
+
+    def add_to_zip_cleanup_log(self, zip_path):
+        """Add a zip file to the cleanup tracking log"""
+        cleanup_log_path = os.path.join(FILE_PATH, "zip_cleanup_log.json")
+        try:
+            # Create or load the cleanup log
+            if os.path.exists(cleanup_log_path):
+                with open(cleanup_log_path, 'r') as f:
+                    cleanup_data = json.load(f)
+            else:
+                cleanup_data = {"zip_files": {}}
             
+            # Add the zip file with current timestamp
+            cleanup_data["zip_files"][zip_path] = datetime.datetime.now().isoformat()
+            
+            # Save the updated log
+            with open(cleanup_log_path, 'w') as f:
+                json.dump(cleanup_data, f, indent=2)
+                
+        except Exception as e:
+            print(f"Error updating zip cleanup log: {str(e)}")
+
+    def cleanup_old_zip_files(self):
+        """Clean up zip files that are older than 2 hours"""
+        cleanup_log_path = os.path.join(FILE_PATH, "zip_cleanup_log.json")
+        if not os.path.exists(cleanup_log_path):
+            return
+            
+        try:
+            with open(cleanup_log_path, 'r') as f:
+                cleanup_data = json.load(f)
+            
+            current_time = datetime.datetime.now()
+            files_to_remove = []
+            
+            # Check each zip file
+            for zip_path, timestamp_str in cleanup_data["zip_files"].items():
+                timestamp = datetime.datetime.fromisoformat(timestamp_str)
+                age = current_time - timestamp
+                
+                # If file is older than 2 hours
+                if age.total_seconds() > 7200:  # 2 hours in seconds
+                    if os.path.exists(zip_path):
+                        try:
+                            os.remove(zip_path)
+                            print(f"Cleaned up old zip file: {zip_path}")
+                            files_to_remove.append(zip_path)
+                        except Exception as e:
+                            print(f"Error removing zip file {zip_path}: {str(e)}")
+                    else:
+                        files_to_remove.append(zip_path)
+            
+            # Remove cleaned up files from the log
+            for zip_path in files_to_remove:
+                del cleanup_data["zip_files"][zip_path]
+            
+            # Save the updated log
+            with open(cleanup_log_path, 'w') as f:
+                json.dump(cleanup_data, f, indent=2)
+                
+        except Exception as e:
+            print(f"Error in zip cleanup process: {str(e)}")
+
     def get_processed_files(self):
         """Get the list of already processed files from the log"""
         log_path = os.path.join(FILE_PATH, self.log_file)
         try:
             with open(log_path, 'r') as f:
                 log_data = json.load(f)
-                return log_data.get("processed_files", [])
+                return log_data.get("processed_dirs", [])
         except (json.JSONDecodeError, FileNotFoundError):
             # If the file doesn't exist or is invalid, create a new one
             with open(log_path, 'w') as f:
-                json.dump({"processed_files": []}, f)
+                json.dump({"processed_dirs": []}, f)
             return []
             
-    def add_to_processed_log(self, filename):
-        """Add a processed file to the log"""
+    def add_to_processed_log(self, dirname):
+        """Add a processed directory to the log"""
         log_path = os.path.join(FILE_PATH, self.log_file)
         try:
             with open(log_path, 'r') as f:
                 log_data = json.load(f)
                 
-            if filename not in log_data["processed_files"]:
-                log_data["processed_files"].append(filename)
+            if dirname not in log_data["processed_dirs"]:
+                log_data["processed_dirs"].append(dirname)
                 
-                # Add timestamp
-                if "timestamps" not in log_data:
-                    log_data["timestamps"] = {}
+            # Add timestamp
+            if "timestamps" not in log_data:
+                log_data["timestamps"] = {}
                     
-                log_data["timestamps"][filename] = datetime.datetime.now().isoformat()
-                
+            log_data["timestamps"][dirname] = datetime.datetime.now().isoformat()
+            
             with open(log_path, 'w') as f:
                 json.dump(log_data, f, indent=2)
                 
