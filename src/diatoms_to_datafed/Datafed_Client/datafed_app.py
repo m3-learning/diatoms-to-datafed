@@ -12,7 +12,7 @@ from util import get_file_metadata  # Import the utility function
 import threading
 import datetime
 import glob
-import zipfile
+# import zipfile  # No longer needed - zipping logic commented out
 load_dotenv()
 FILE_PATH = os.getenv("FILE_PATH")
 globus_key = "/shared-data/globus-endpoint_id.txt"
@@ -596,102 +596,111 @@ class DataFedApp(param.Parameterized):
             # Check if it's a directory
             if os.path.isdir(dir_path):
                 print(f"Directory detected: {dir_path}")
-                # Create temp_zips directory if it doesn't exist
-                temp_zips_dir = os.path.join(FILE_PATH, "temp_zips")
-                try:
-                    if not os.path.exists(temp_zips_dir):
-                        os.makedirs(temp_zips_dir, exist_ok=True)
-                        print(f"Created temp_zips directory: {temp_zips_dir}")
-                    
-                    # Test write permissions
-                    test_file = os.path.join(temp_zips_dir, "test_write.tmp")
-                    try:
-                        with open(test_file, 'w') as f:
-                            f.write("test")
-                        os.remove(test_file)
-                    except (IOError, PermissionError) as e:
-                        error_msg = f"Permission error: Cannot write to temp_zips directory. Please check permissions for: {temp_zips_dir}"
-                        print(error_msg)
-                        self.record_output_pane.object = f"<h3>{error_msg}</h3>"
-                        return False
-                        
-                except PermissionError as e:
-                    error_msg = f"Permission error: Cannot create temp_zips directory. Please check permissions for: {FILE_PATH}"
-                    print(error_msg)
-                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
-                    return False
-                except Exception as e:
-                    error_msg = f"Error creating temp_zips directory: {str(e)}"
-                    print(error_msg)
-                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
-                    return False
+                # ZIP LOGIC COMMENTED OUT - Processing directory directly instead of zipping
+                # # Create temp_zips directory if it doesn't exist
+                # # Use current auto-processing directory for temp_zips
+                # base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+                # temp_zips_dir = os.path.join(base_dir, "temp_zips")
+                # try:
+                #     if not os.path.exists(temp_zips_dir):
+                #         os.makedirs(temp_zips_dir, exist_ok=True)
+                #         print(f"Created temp_zips directory: {temp_zips_dir}")
+                #     
+                #     # Test write permissions
+                #     test_file = os.path.join(temp_zips_dir, "test_write.tmp")
+                #     try:
+                #         with open(test_file, 'w') as f:
+                #             f.write("test")
+                #         os.remove(test_file)
+                #     except (IOError, PermissionError) as e:
+                #         error_msg = f"Permission error: Cannot write to temp_zips directory. Please check permissions for: {temp_zips_dir}"
+                #         print(error_msg)
+                #         self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                #         return False
+                #         
+                # except PermissionError as e:
+                #     error_msg = f"Permission error: Cannot create temp_zips directory. Please check permissions for: {base_dir}"
+                #     print(error_msg)
+                #         self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                #         return False
+                # except Exception as e:
+                #     error_msg = f"Error creating temp_zips directory: {str(e)}"
+                #         print(error_msg)
+                #         self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                #         return False
+                # 
+                # # Create a zip file of the directory with timestamp
+                # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                # zip_filename = f"{file_title}_{timestamp}.zip"
+                # zip_path = os.path.join(temp_zips_dir, zip_filename)
+                # 
+                # try:
+                #     print(f"Creating zip file: {zip_path}")
+                #     
+                #     # First, count total files for progress bar
+                #     total_files = 0
+                #     for root, dirs, files in os.walk(dir_path):
+                #         total_files += len(files)
+                #     
+                #     self.processing_status = "Zipping directory..."
+                #     self.total_files = total_files
+                #     self.progress = 0
+                #     self.current_processing_file = f"Zipping {dirname}"
+                #         self.update_file_tracking_panes()
+                #     
+                #     processed_files = 0
+                #     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                #         for root, dirs, files in os.walk(dir_path):
+                #             for file in files:
+                #                 try:
+                #                     file_full_path = os.path.join(root, file)
+                #                     # Calculate the relative path for the file in the zip
+                #                     rel_path = os.path.relpath(file_full_path, dir_path)
+                #                     zipf.write(file_full_path, rel_path)
+                #     
+                #                                     # Update progress
+                #                                     processed_files += 1
+                #                                     self.progress = int((processed_files / total_files) * 100)
+                #                                     self.current_processing_file = f"Zipping {dirname} - {processed_files}/{total_files} files"
+                #                                     self.update_file_tracking_panes()
+                #     
+                #                                 except PermissionError as e:
+                #                                     print(f"Permission error accessing file {file_full_path}: {str(e)}")
+                #                                     continue
+                #                                 except Exception as e:
+                #                                     print(f"Error processing file {file_full_path}: {str(e)}")
+                #                                     continue
+                #     
+                #     print(f"Successfully created zip file: {zip_path}")
+                #     # Use the zip file for further processing
+                #     dir_path = zip_path
+                #     dirname = zip_filename
+                #     file_title = os.path.splitext(dirname)[0]
+                #     
+                #     # Add zip file to cleanup tracking
+                #     self.add_to_zip_zip_cleanup_log(zip_path)
+                #     
+                #     # Reset progress for next stage
+                #     self.progress = 0
+                #     self.current_processing_file = f"Uploading {dirname}"
+                #         self.update_file_tracking_panes()
+                #     
+                # except PermissionError as e:
+                #     error_msg = f"Permission error: Cannot create zip file. Please check permissions for: {temp_zips_dir}"
+                #     print(error_msg)
+                #         self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                #         return False
+                # except Exception as e:
+                #     error_msg = f"Error creating zip file: {str(e)}"
+                #     print(error_msg)
+                #         self.record_output_pane.object = f"<h3>{error_msg}</h3>"
+                #         return False
                 
-                # Create a zip file of the directory with timestamp
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                zip_filename = f"{file_title}_{timestamp}.zip"
-                zip_path = os.path.join(temp_zips_dir, zip_filename)
-                
-                try:
-                    print(f"Creating zip file: {zip_path}")
-                    
-                    # First, count total files for progress bar
-                    total_files = 0
-                    for root, dirs, files in os.walk(dir_path):
-                        total_files += len(files)
-                    
-                    self.processing_status = "Zipping directory..."
-                    self.total_files = total_files
-                    self.progress = 0
-                    self.current_processing_file = f"Zipping {dirname}"
-                    self.update_file_tracking_panes()
-                    
-                    processed_files = 0
-                    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                        for root, dirs, files in os.walk(dir_path):
-                            for file in files:
-                                try:
-                                    file_full_path = os.path.join(root, file)
-                                    # Calculate the relative path for the file in the zip
-                                    rel_path = os.path.relpath(file_full_path, dir_path)
-                                    zipf.write(file_full_path, rel_path)
-                                    
-                                    # Update progress
-                                    processed_files += 1
-                                    self.progress = int((processed_files / total_files) * 100)
-                                    self.current_processing_file = f"Zipping {dirname} - {processed_files}/{total_files} files"
-                                    self.update_file_tracking_panes()
-                                    
-                                except PermissionError as e:
-                                    print(f"Permission error accessing file {file_full_path}: {str(e)}")
-                                    continue
-                                except Exception as e:
-                                    print(f"Error processing file {file_full_path}: {str(e)}")
-                                    continue
-                    
-                    print(f"Successfully created zip file: {zip_path}")
-                    # Use the zip file for further processing
-                    dir_path = zip_path
-                    dirname = zip_filename
-                    file_title = os.path.splitext(dirname)[0]
-                    
-                    # Add zip file to cleanup tracking
-                    self.add_to_zip_cleanup_log(zip_path)
-                    
-                    # Reset progress for next stage
-                    self.progress = 0
-                    self.current_processing_file = f"Uploading {dirname}"
-                    self.update_file_tracking_panes()
-                    
-                except PermissionError as e:
-                    error_msg = f"Permission error: Cannot create zip file. Please check permissions for: {temp_zips_dir}"
-                    print(error_msg)
-                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
-                    return False
-                except Exception as e:
-                    error_msg = f"Error creating zip file: {str(e)}"
-                    print(error_msg)
-                    self.record_output_pane.object = f"<h3>{error_msg}</h3>"
-                    return False
+                # Process directory directly without zipping
+                print(f"Processing directory directly: {dir_path}")
+                self.processing_status = f"Processing directory: {dirname}"
+                self.current_processing_file = f"Processing {dirname}"
+                self.update_file_tracking_panes()
             
             # Try to extract metadata if possible, otherwise use basic file info
             try:
@@ -769,73 +778,76 @@ class DataFedApp(param.Parameterized):
             self.record_output_pane.object = f"<h3>{error_msg}</h3>"
             return False
 
-    def add_to_zip_cleanup_log(self, zip_path):
-        """Add a zip file to the cleanup tracking log"""
-        cleanup_log_path = os.path.join(FILE_PATH, "zip_cleanup_log.json")
-        try:
-            # Create or load the cleanup log
-            if os.path.exists(cleanup_log_path):
-                with open(cleanup_log_path, 'r') as f:
-                    cleanup_data = json.load(f)
-            else:
-                cleanup_data = {"zip_files": {}}
-            
-            # Add the zip file with current timestamp
-            cleanup_data["zip_files"][zip_path] = datetime.datetime.now().isoformat()
-            
-            # Save the updated log
-            with open(cleanup_log_path, 'w') as f:
-                json.dump(cleanup_data, f, indent=2)
-                
-        except Exception as e:
-            print(f"Error updating zip cleanup log: {str(e)}")
-
-    def cleanup_old_zip_files(self):
-        """Clean up zip files that are older than 2 hours"""
-        # Use current auto-processing directory for cleanup
-        base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
-        if not base_dir:
-            print("No valid directory for cleanup")
-            return
-            
-        cleanup_log_path = os.path.join(base_dir, "zip_cleanup_log.json")
-        if not os.path.exists(cleanup_log_path):
-            return
-            
-        try:
-            with open(cleanup_log_path, 'r') as f:
-                cleanup_data = json.load(f)
-            
-            current_time = datetime.datetime.now()
-            files_to_remove = []
-            
-            # Check each zip file
-            for zip_path, timestamp_str in cleanup_data["zip_files"].items():
-                timestamp = datetime.datetime.fromisoformat(timestamp_str)
-                age = current_time - timestamp
-                
-                # If file is older than 2 hours
-                if age.total_seconds() > 7200:  # 2 hours in seconds
-                    if os.path.exists(zip_path):
-                        try:
-                            os.remove(zip_path)
-                            print(f"Cleaned up old zip file: {zip_path}")
-                            files_to_remove.append(zip_path)
-                        except Exception as e:
-                            print(f"Error removing zip file {zip_path}: {str(e)}")
-                    else:
-                        files_to_remove.append(zip_path)
-            
-            # Remove cleaned up files from the log
-            for zip_path in files_to_remove:
-                del cleanup_data["zip_files"][zip_path]
-            
-            # Save the updated log
-            with open(cleanup_log_path, 'w') as f:
-                json.dump(cleanup_data, f, indent=2)
-                
-        except Exception as e:
-            print(f"Error in zip cleanup process: {str(e)}")
+    # ZIP CLEANUP METHODS COMMENTED OUT - No longer creating zip files
+    # def add_to_zip_cleanup_log(self, zip_path):
+    #     """Add a zip file to the cleanup tracking log"""
+    #     # Use current auto-processing directory for cleanup log
+    #     base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+    #     cleanup_log_path = os.path.join(base_dir, "zip_cleanup_log.json")
+    #     try:
+    #         # Create or load the cleanup log
+    #         if os.path.exists(cleanup_log_path):
+    #         with open(cleanup_log_path, 'r') as f:
+    #             cleanup_data = json.load(f)
+    #         else:
+    #             cleanup_data = {"zip_files": {}}
+    #         
+    #         # Add the zip file with current timestamp
+    #         cleanup_data["zip_files"][zip_path] = datetime.datetime.now().isoformat()
+    #         
+    #         # Save the updated log
+    #         with open(cleanup_log_path, 'w') as f:
+    #             json.dump(cleanup_data, f, indent=2)
+    #             
+    #     except Exception as e:
+    #         print(f"Error updating zip cleanup log: {str(e)}")
+    # 
+    # def cleanup_old_zip_files(self):
+    #     """Clean up zip files that are older than 2 hours"""
+    #     # Use current auto-processing directory for cleanup
+    #     base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+    #     if not base_dir:
+    #         print("No valid directory for cleanup")
+    #         return
+    #             
+    #         cleanup_log_path = os.path.join(base_dir, "zip_cleanup_log.json")
+    #         if not os.path.exists(cleanup_log_path):
+    #             return
+    #             
+    #         try:
+    #             with open(cleanup_path, 'r') as f:
+    #                 cleanup_data = json.load(f)
+    #             
+    #             current_time = datetime.datetime.now()
+    #             files_to_remove = []
+    #             
+    #             # Check each zip file
+    #             for zip_path, timestamp_str in cleanup_data["zip_files"].items():
+    #                 timestamp = datetime.datetime.fromisoformat(timestamp_str)
+    #                 age = current_time - timestamp
+    #                 
+    #                 # If file is older than 2 hours
+    #                 if age.total_seconds() > 7200:  # 2 hours in seconds
+    #                     if os.path.exists(zip_path):
+    #                         try:
+    #                             os.remove(zip_path)
+    #                             print(f"Cleaned up old zip file: {zip_path}")
+    #                             files_to_remove.append(zip_path)
+    #                         except Exception as e:
+    #                             print(f"Error removing zip file {zip_path}: {str(e)}")
+    #                     else:
+    #                         files_to_remove.append(zip_path)
+    #             
+    #             # Remove cleaned up files from the log
+    #             for zip_path in files_to_remove:
+    #                 del cleanup_data["zip_files"][zip_path]
+    #             
+    #             # Save the updated log
+    #             with open(cleanup_log_path, 'w') as f:
+    #                 json.dump(cleanup_data, f, indent=2)
+    #                 
+    #         except Exception as e:
+    #             print(f"Error in zip cleanup process: {str(e)}")
 
     def get_processed_files(self):
         """Get the list of already processed files from the log"""
@@ -914,15 +926,36 @@ class DataFedApp(param.Parameterized):
                 print(f"Created new log file at {log_path}")
                 
             while self.auto_processing:
-                # Clean up old zip files
-                self.cleanup_old_zip_files()
+                # Get the current directory at the start of each cycle
+                current_base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+                if current_base_dir != base_dir:
+                    base_dir = current_base_dir
+                    print(f"Directory changed during processing, now using: {base_dir}")
+                
+                # ZIP CLEANUP COMMENTED OUT - No longer creating zip files
+                # self.cleanup_old_zip_files()
                 
                 # Read the log file to get processed directories
                 processed_dirs = self.get_processed_files()
                 self.processed_files_list = processed_dirs
                 print(f"Found {len(processed_dirs)} previously processed directories in log")
                 
-                # Get all directories in the base directory
+                # Get all directories and files in the base directory
+                all_items = []
+                
+                # First, add files in the current directory
+                current_files = []
+                try:
+                    for item in os.listdir(base_dir):
+                        item_path = os.path.join(base_dir, item)
+                        if os.path.isfile(item_path):
+                            # Skip temp files and logs
+                            if not item.startswith('.') and not item.endswith('.tmp') and not item.endswith('.log'):
+                                current_files.append(item_path)
+                except Exception as e:
+                    print(f"Error reading current directory: {e}")
+                
+                # Then add subdirectories
                 all_dirs = []
                 for root, dirs, files in os.walk(base_dir):
                     # Skip $RECYCLE.BIN directory and temp_zips directory
@@ -934,51 +967,62 @@ class DataFedApp(param.Parameterized):
                     if root != base_dir:
                         all_dirs.append(root)
                 
-                print(f"Found {len(all_dirs)} directories to process")
+                # Combine files and directories
+                all_items = current_files + all_dirs
                 
-                # Filter out already processed directories
-                new_dirs = [d for d in all_dirs if os.path.basename(d) not in processed_dirs]
-                self.unprocessed_files_list = [os.path.basename(d) for d in new_dirs]
+                print(f"Found {len(current_files)} files and {len(all_dirs)} directories to process")
+                print(f"Total items to process: {len(all_items)}")
                 
-                print(f"Found {len(new_dirs)} new unprocessed directories")
-                for d in new_dirs[:5]:  # Print up to 5 examples
-                    print(f"  - {d}")
-                if len(new_dirs) > 5:
-                    print(f"  - ... and {len(new_dirs) - 5} more")
+                # Filter out already processed items
+                new_items = [item for item in all_items if os.path.basename(item) not in processed_dirs]
+                self.unprocessed_files_list = [os.path.basename(item) for item in new_items]
                 
-                if new_dirs:
-                    self.processing_status = f"Found {len(new_dirs)} new directories"
-                    self.total_files = len(new_dirs)
+                print(f"Found {len(new_items)} new unprocessed items")
+                for item in new_items[:5]:  # Print up to 5 examples
+                    print(f"  - {item}")
+                if len(new_items) > 5:
+                    print(f"  - ... and {len(new_items) - 5} more")
+                
+                if new_items:
+                    self.processing_status = f"Found {len(new_items)} new items to process"
+                    self.total_files = len(new_items)
                     self.progress = 0
                     
-                    for idx, dir_path in enumerate(new_dirs):
+                    for idx, item_path in enumerate(new_items):
                         if not self.auto_processing:
                             break
                             
-                        dirname = os.path.basename(dir_path)
-                        self.current_file = dirname
-                        self.current_processing_file = dirname
-                        self.processing_status = f"Processing directory {dirname}"
-                        print(f"Processing directory {idx+1}/{len(new_dirs)}: {dirname}")
+                        itemname = os.path.basename(item_path)
+                        self.current_file = itemname
+                        self.current_processing_file = itemname
+                        
+                        # Check if it's a file or directory
+                        if os.path.isfile(item_path):
+                            self.processing_status = f"Processing file {itemname}"
+                            print(f"Processing file {idx+1}/{len(new_items)}: {itemname}")
+                        else:
+                            self.processing_status = f"Processing directory {itemname}"
+                            print(f"Processing directory {idx+1}/{len(new_items)}: {itemname}")
+                        
                         self.progress = int((idx / self.total_files) * 100)
                         
                         # Update the file tracking panes
                         self.update_file_tracking_panes()
                         
-                        # Process the directory
-                        success = self.process_single_file(dir_path)
+                        # Process the item (file or directory)
+                        success = self.process_single_file(item_path)
                         
                         if success:
-                            print(f"Successfully processed directory: {dirname}")
-                            # Add to processed directories log
-                            self.add_to_processed_log(dirname)
-                            # Update processed directories list
-                            self.processed_files_list.append(dirname)
-                            # Remove from unprocessed directories list
-                            if dirname in self.unprocessed_files_list:
-                                self.unprocessed_files_list.remove(dirname)
+                            print(f"Successfully processed: {itemname}")
+                            # Add to processed items log
+                            self.add_to_processed_log(itemname)
+                            # Update processed items list
+                            self.processed_files_list.append(itemname)
+                            # Remove from unprocessed items list
+                            if itemname in self.unprocessed_files_list:
+                                self.unprocessed_files_list.remove(itemname)
                         else:
-                            print(f"Failed to process directory: {dirname}")
+                            print(f"Failed to process: {itemname}")
                         
                         # Update the file tracking panes again
                         self.update_file_tracking_panes()
@@ -989,10 +1033,10 @@ class DataFedApp(param.Parameterized):
                     self.progress = 100
                     self.processing_status = "Processing complete"
                     self.current_processing_file = ""
-                    print("Completed processing batch of directories")
+                    print("Completed processing batch of items")
                 else:
-                    self.processing_status = "No new directories found"
-                    print("No new directories found in this scan")
+                    self.processing_status = "No new items found"
+                    print("No new items found in this scan")
                 
                 # Update the file tracking panes one last time
                 self.update_file_tracking_panes()
@@ -1014,8 +1058,9 @@ class DataFedApp(param.Parameterized):
     def change_auto_processing_directory(self, new_directory):
         """Change the auto-processing directory"""
         if os.path.exists(new_directory) and os.path.isdir(new_directory):
+            old_path = getattr(self, 'file_path', 'Not set')
             self.file_path = new_directory
-            print(f"Auto-processing directory changed to: {new_directory}")
+            print(f"Auto-processing directory changed from '{old_path}' to: {new_directory}")
             # Update the file selector as well
             self.file_selector.directory = new_directory
             # Update the auto-processing directory selector to show current directory
@@ -1043,9 +1088,11 @@ class DataFedApp(param.Parameterized):
         if event.new:
             new_dir = event.new
             print(f"Directory changed to: {new_dir}")
+            print(f"Previous file_path was: {getattr(self, 'file_path', 'Not set')}")
             
             if os.path.exists(new_dir) and os.path.isdir(new_dir):
                 self.change_auto_processing_directory(new_dir)
+                print(f"Successfully updated file_path to: {self.file_path}")
             else:
                 print(f"Invalid directory: {new_dir}")
                 # Revert to previous valid directory
@@ -1058,7 +1105,7 @@ class DataFedApp(param.Parameterized):
             self.auto_processing_dir_selector.directory = self.file_path
             print(f"Updated directory selector to show: {self.file_path}")
     
-    def sync_file_selector_with_auto_processing_dir(self):
+    def sync_file_selector_with_auto_processing_dir(self, event=None):
         """Sync the main file selector with the current auto-processing directory"""
         if hasattr(self, 'file_path') and self.file_path:
             self.file_selector.directory = self.file_path

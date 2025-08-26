@@ -90,6 +90,9 @@ class FileSelector(CompositeWidget):
         sel = fullpath(os.path.join(self._cwd, relpath))
         if os.path.isdir(sel):
             self._directory.value = sel
+            # Update the directory parameter to trigger watchers
+            if sel != self.directory:
+                self.directory = sel
         else:
             self._directory.value = self._cwd
         self._update_files()
@@ -124,6 +127,10 @@ class FileSelector(CompositeWidget):
         elif path != self._directory.value:
             self._directory.value = path
         self._go.disabled = path == self._cwd
+        
+        # Update the directory parameter to trigger watchers
+        if path != self.directory:
+            self.directory = path
 
     def _refresh(self):
         self._update_files(refresh=True)
@@ -204,7 +211,11 @@ class FileSelector(CompositeWidget):
 
     def _go_back(self, event):
         self._position -= 1
-        self._directory.value = self._stack[self._position]
+        new_path = self._stack[self._position]
+        self._directory.value = new_path
+        # Update the directory parameter to trigger watchers
+        if new_path != self.directory:
+            self.directory = new_path
         self._update_files()
         self._forward.disabled = False
         if self._position == 0:
@@ -212,12 +223,20 @@ class FileSelector(CompositeWidget):
 
     def _go_forward(self, event):
         self._position += 1
-        self._directory.value = self._stack[self._position]
+        new_path = self._stack[self._position]
+        self._directory.value = new_path
+        # Update the directory parameter to trigger watchers
+        if new_path != self.directory:
+            self.directory = new_path
         self._update_files()
 
     def _go_up(self, event=None):
         path = self._cwd.split(os.path.sep)
-        self._directory.value = os.path.sep.join(path[:-1]) or os.path.sep
+        new_path = os.path.sep.join(path[:-1]) or os.path.sep
+        self._directory.value = new_path
+        # Update the directory parameter to trigger watchers
+        if new_path != self.directory:
+            self.directory = new_path
         self._update_files(True)
 
     def _update_output(self, selected_files):
