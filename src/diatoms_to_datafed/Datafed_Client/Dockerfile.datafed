@@ -14,19 +14,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
+    python3 \
+    python3-venv \
+    python3-pip \
     libgl1 \
-    libgl1-mesa-glx 
-
-# This fix: libGL error: No matching fbConfigs or visuals found
-ENV LIBGL_ALWAYS_INDIRECT=1
-
-# Install Miniconda
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p /opt/conda && \
-    rm /tmp/miniconda.sh
-
-# Add conda to PATH
-ENV PATH=/opt/conda/bin:$PATH
+    libgl1-mesa-glx \
+ && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
@@ -34,13 +27,15 @@ WORKDIR /app
 # Copy the Datafed_Client directory contents to the container
 COPY ./src/diatoms_to_datafed/Datafed_Client/. .
 
-# Create and activate the conda environment
-RUN conda create -n datafed python=3.11 pyqt -y \
-    && echo "source activate datafed" > ~/.bashrc
-ENV PATH /opt/conda/envs/datafed/bin:$PATH
+# Create virtual environment and upgrade pip
+RUN python3 -m venv "${VENV_PATH}" \
+ && "${VENV_PATH}/bin/pip" install --upgrade pip
 
 # Install the dependencies from requirements.txt
-RUN /opt/conda/envs/datafed/bin/pip install --no-cache-dir -r requirements.txt
+RUN "${VENV_PATH}/bin/pip" install --no-cache-dir -r requirements.txt
+
+# Put venv first on PATH
+ENV PATH="${VENV_PATH}/bin:$PATH"
 
 # Create a user with a home directory
 RUN useradd -ms /bin/bash gridftp
