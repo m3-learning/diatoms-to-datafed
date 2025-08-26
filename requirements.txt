@@ -1,5 +1,5 @@
 datafed
-protobuf>=4.21.1
+protobuf
 jupyter
 matplotlib
 numpy
