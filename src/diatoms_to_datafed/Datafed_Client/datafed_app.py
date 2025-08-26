@@ -55,8 +55,8 @@ class DataFedApp(param.Parameterized):
     current_user = param.String(default="Not Logged In", label="Current User")
     current_context = param.String(default="No Context", label="Current Context")
     
-    selected_context = param.Selector(default='root', objects={}, label="Select Context")
-    available_contexts = param.Dict(default={}, label="Available Contexts")
+    selected_context = param.Selector(default='root', objects={}, label="Select Project")
+    available_contexts = param.Dict(default={}, label="Available Projects")
     selected_collection = param.Selector(objects={}, label="Select Collection")
     available_collections = param.Dict(default={}, label="Available Collections")
 

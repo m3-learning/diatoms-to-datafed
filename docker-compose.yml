@@ -1,13 +1,13 @@
 version: "3.8"
 
-# x-user-defaults: &user_defaults
-#   user: "${local_user}:0"
-#   security_opt:
-#     - no-new-privileges:true
+x-user-defaults: &user_defaults
+  user: "${local_user}:0"
+  security_opt:
+    - no-new-privileges:true
 
 services:
   globus-connect:
-    # <<: *user_defaults
+    <<: *user_defaults
     build:
       context: .
       dockerfile: Dockerfile.globus-connect # Ensure Dockerfile.globus-connect is in the correct path
@@ -29,7 +29,7 @@ services:
     restart: unless-stopped # Automatically restart unless stopped manually
 
   datafed:
-    # <<: *user_defaults
+    <<: *user_defaults
     build:
       context: .
       dockerfile: src/diatoms_to_datafed/Datafed_Client/Dockerfile.datafed # Ensure Dockerfile.datafed is in the correct path
