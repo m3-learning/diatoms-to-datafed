@@ -234,6 +234,14 @@ def auto_processing_panel(progress, status, current_file, task_id):
         pn.Row(app.start_auto_button, app.stop_auto_button),
         pn.Row(
             pn.Column(
+                pn.pane.Markdown("### Directory Configuration", css_classes=['md-text']),
+                pn.pane.Markdown("**Current Auto Processing Directory:**", css_classes=['md-text']),
+                pn.pane.Markdown(f"`{app.file_path}`", css_classes=['md-text']),
+                pn.pane.Markdown("**Change Directory:**", css_classes=['md-text']),
+                app.auto_processing_dir_selector,
+                css_classes=['progress-container']
+            ),
+            pn.Column(
                 pn.pane.Markdown(f"**Status:** {status}", css_classes=['md-text']),
                 pn.pane.Markdown(f"**Current File:** {current_file}", css_classes=['md-text']),
                 pn.pane.Markdown(f"**Task ID:** {task_id}", css_classes=['md-text']),

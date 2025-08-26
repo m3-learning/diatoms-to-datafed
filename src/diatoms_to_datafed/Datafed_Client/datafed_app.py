@@ -17,12 +17,16 @@ load_dotenv()
 FILE_PATH = os.getenv("FILE_PATH")
 globus_key = "/shared-data/globus-endpoint_id.txt"
 ep=''
-with open(globus_key, "r") as file:
-    # Read the entire file content and strip whitespace
-    content = file.read().strip()
-    print("Endpoint is:", content, "length:", len(content))
-    ep = content
-print(f'os.environ:{ep}')
+try:
+    with open(globus_key, "r") as file:
+        # Read the entire file content and strip whitespace
+        content = file.read().strip()
+        print("Endpoint is:", content, "length:", len(content))
+        ep = content
+    print(f'os.environ:{ep}')
+except FileNotFoundError:
+    print(f"Warning: Globus endpoint file not found at {globus_key}")
+    ep = ""
 pn.extension('material')
 pn.extension('jsoneditor')
 
@@ -119,6 +123,19 @@ class DataFedApp(param.Parameterized):
 
         self.file_selector = FileSelector(FILE_PATH)
         self.file_selector.param.watch(self.update_metadata_from_file_selector, 'value')
+        
+        # Initialize file_path with default FILE_PATH
+        self.file_path = FILE_PATH
+        
+        # Create auto-processing directory selector
+        self.auto_processing_dir_selector = pn.widgets.TextInput(
+            name='Auto Processing Directory',
+            value=FILE_PATH,
+            placeholder='Enter directory path for auto-processing'
+        )
+        # Set the directory attribute for compatibility
+        self.auto_processing_dir_selector.directory = FILE_PATH
+        self.auto_processing_dir_selector.param.watch(self.update_auto_processing_directory, 'value')
 
         self.param.watch(self.update_collections, 'selected_context')
         self.param.watch(self.update_collections, 'selected_collection')
@@ -943,3 +960,37 @@ class DataFedApp(param.Parameterized):
             self.auto_processing = False
             self.start_auto_button.disabled = False
             self.stop_auto_button.disabled = True
+
+    def update_auto_processing_directory(self, event):
+        """Update the auto-processing directory when the selector changes"""
+        if hasattr(event, 'new') and event.new:
+            new_dir = event.new
+            if os.path.exists(new_dir) and os.path.isdir(new_dir):
+                self.change_auto_processing_directory(new_dir)
+            else:
+                print(f"Invalid directory: {new_dir}")
+
+    def change_auto_processing_directory(self, new_directory):
+        """Change the auto-processing directory"""
+        if os.path.exists(new_directory) and os.path.isdir(new_directory):
+            self.file_path = new_directory
+            print(f"Auto-processing directory changed to: {new_directory}")
+            # Update the file selector as well
+            self.file_selector.directory = new_directory
+            # Update the auto-processing directory selector
+            self.auto_processing_dir_selector.directory = new_directory
+        else:
+            print(f"Invalid directory: {new_directory}")
+
+    def get_current_directory_display(self):
+        """Get the current directory for display purposes"""
+        return self.file_path if hasattr(self, 'file_path') else FILE_PATH
+
+    def validate_and_change_directory(self, new_directory):
+        """Validate and change the directory if valid"""
+        if os.path.exists(new_directory) and os.path.isdir(new_directory):
+            self.change_auto_processing_directory(new_directory)
+            return True
+        else:
+            print(f"Directory validation failed: {new_directory}")
+            return False

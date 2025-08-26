@@ -65,3 +65,30 @@ The service will:
 - Python 3.9 or higher
 - DataFed account and repository
 - Access to the microscope data directory 
+
+
+## Running the Application
+
+### Globus container
+- Build Globus container
+```bash
+docker build -t globus_container -f Dockerfile.globus-connect .
+```
+- Setup Globus endpoint
+```bash
+docker run -e DataPath="{Your Local Data directory}" -e ConfigPath="{Your PWD/(mkdir config)}" -v "{Your PWD + (mkdir config)}:/home/gridftp/globus_config" -v "{Your Local Data Directory}:/home/gridftp/data" -it globus_container
+```
+- Test Globus Endpoint
+```bash
+docker run -e DataPath="{Your Local Data Directory}" -e ConfigPath="{Your PWD + (mkdir config)}" -v "{Your PWD + (mkdir config)}:/home/gridftp/globus_config" -v "{Your Local Data Directory}:/home/gridftp/data" -e START_GLOBUS="true" -it globus_container 
+```
+
+### Running application
+-
+```bash 
+docker-compose up --build 
+```
+Check the app running at
+```bash
+http://localhost:5006/app
+```
