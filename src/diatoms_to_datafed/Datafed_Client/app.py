@@ -174,6 +174,28 @@ select:focus {
 .bk-header .bk-btn:hover {
     background-color: rgba(255, 255, 255, 0.1) !important;
 }
+
+.file-browser-container {
+    background-color: var(--md-surface-color);
+    padding: 16px;
+    border-radius: 4px;
+    box-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12);
+}
+
+.file-browser-pane {
+    background-color: var(--md-background-color);
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.file-browser-container select {
+    border: 1px solid var(--md-divider-color);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: white;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
 """)
 
 @pn.depends(app.param.current_user)
@@ -236,9 +258,12 @@ def auto_processing_panel(progress, status, current_file, task_id):
             pn.Column(
                 pn.pane.Markdown("### Directory Configuration", css_classes=['md-text']),
                 pn.pane.Markdown("**Current Auto Processing Directory:**", css_classes=['md-text']),
-                pn.pane.Markdown(f"`{app.file_path}`", css_classes=['md-text']),
-                pn.pane.Markdown("**Change Directory:**", css_classes=['md-text']),
+                pn.bind(lambda _: f"`{app.file_path or 'Not set'}`", app.param.progress),
+                pn.pane.Markdown("**Directory Info:**", css_classes=['md-text']),
+                pn.bind(lambda _: f"📁 {app.get_auto_processing_directory_info().get('dir_count', 0)} directories, 📄 {app.get_auto_processing_directory_info().get('file_count', 0)} files", app.param.progress),
+                pn.pane.Markdown("**Directory Selection:**", css_classes=['md-text']),
                 app.auto_processing_dir_selector,
+                pn.Row(app.sync_file_selector_button),
                 css_classes=['progress-container']
             ),
             pn.Column(
@@ -250,6 +275,7 @@ def auto_processing_panel(progress, status, current_file, task_id):
                 css_classes=['progress-container']
             )
         ),
+
         pn.Row(
             pn.Column(
                 app.current_file_pane,

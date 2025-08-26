@@ -127,15 +127,28 @@ class DataFedApp(param.Parameterized):
         # Initialize file_path with default FILE_PATH
         self.file_path = FILE_PATH
         
-        # Create auto-processing directory selector
-        self.auto_processing_dir_selector = pn.widgets.TextInput(
+        # Create directory selector using the existing FileSelector module
+        self.auto_processing_dir_selector = FileSelector(
+            directory=FILE_PATH,
             name='Auto Processing Directory',
-            value=FILE_PATH,
-            placeholder='Enter directory path for auto-processing'
+            width=600,
+            height=400
         )
-        # Set the directory attribute for compatibility
-        self.auto_processing_dir_selector.directory = FILE_PATH
-        self.auto_processing_dir_selector.param.watch(self.update_auto_processing_directory, 'value')
+        self.auto_processing_dir_selector.param.watch(self.on_directory_changed, 'directory')
+        
+        # Create sync button to sync file selector with auto-processing directory
+        self.sync_file_selector_button = pn.widgets.Button(
+            name='🔗 Sync File Selector',
+            button_type='light',
+            width=150
+        )
+        self.sync_file_selector_button.on_click(self.sync_file_selector_with_auto_processing_dir)
+        
+        # Set a better default directory if the current one doesn't exist
+        self._ensure_valid_directory()
+        
+        # Update the directory selector to show the current directory
+        self.update_directory_selector_display()
 
         self.param.watch(self.update_collections, 'selected_context')
         self.param.watch(self.update_collections, 'selected_collection')
@@ -266,27 +279,39 @@ class DataFedApp(param.Parameterized):
         if not self.title or not self.metadata_json_editor.value:
             self.record_output_pane.object = "<h3>Error: Title and metadata are required</h3>"
             return
+        
+        # Check if we have a file selected or if we should use the auto-processing directory
+        file_to_upload = None
+        if self.file_selector.value and len(self.file_selector.value) > 0:
+            file_to_upload = self.file_selector.value[0]
+        elif hasattr(self, 'file_path') and self.file_path:
+            # If no file is selected but we have an auto-processing directory, 
+            # we could create a record with just metadata
+            self.record_output_pane.object = "<h3>Warning: No file selected. Creating record with metadata only.</h3>"
+            
         try:
             if self.selected_context:
                 self.df_api.setContext(self.selected_context)
             response = self.df_api.dataCreate(
                 title=self.title,
                 metadata=json.dumps(self.metadata_json_editor.value),
-                # metadata_file=self.file_selector.value,
-                #  external= True,
                 parent_id=self.available_collections[self.selected_collection] 
             )
             record_id = response[0].data[0].id
-            try:
-                res = self.df_api.dataPut(
-                    data_id=record_id, 
-                    wait = False,
-                    path=self.file_selector.value[0]
+            
+            if file_to_upload:
+                try:
+                    res = self.df_api.dataPut(
+                        data_id=record_id, 
+                        wait=False,
+                        path=file_to_upload
                     )
-                print(f"res:{res}")
-                self.record_output_pane.object = f"<h3>Success: Record created with ID {record_id}:{res}</h3>"
-            except Exception as e:
-                self.record_output_pane.object = f"<h3>Error: Failed to add file to record: {e}</h3>"    
+                    print(f"res:{res}")
+                    self.record_output_pane.object = f"<h3>Success: Record created with ID {record_id} and file uploaded: {res}</h3>"
+                except Exception as e:
+                    self.record_output_pane.object = f"<h3>Error: Failed to add file to record: {e}</h3>"    
+            else:
+                self.record_output_pane.object = f"<h3>Success: Record created with ID {record_id} (metadata only)</h3>"
                 
             self.update_records()
         except Exception as e:
@@ -767,7 +792,13 @@ class DataFedApp(param.Parameterized):
 
     def cleanup_old_zip_files(self):
         """Clean up zip files that are older than 2 hours"""
-        cleanup_log_path = os.path.join(FILE_PATH, "zip_cleanup_log.json")
+        # Use current auto-processing directory for cleanup
+        base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+        if not base_dir:
+            print("No valid directory for cleanup")
+            return
+            
+        cleanup_log_path = os.path.join(base_dir, "zip_cleanup_log.json")
         if not os.path.exists(cleanup_log_path):
             return
             
@@ -808,7 +839,13 @@ class DataFedApp(param.Parameterized):
 
     def get_processed_files(self):
         """Get the list of already processed files from the log"""
-        log_path = os.path.join(FILE_PATH, self.log_file)
+        # Use current auto-processing directory for log file
+        base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+        if not base_dir:
+            print("No valid directory for log file")
+            return []
+            
+        log_path = os.path.join(base_dir, self.log_file)
         try:
             with open(log_path, 'r') as f:
                 log_data = json.load(f)
@@ -821,7 +858,13 @@ class DataFedApp(param.Parameterized):
             
     def add_to_processed_log(self, dirname):
         """Add a processed directory to the log"""
-        log_path = os.path.join(FILE_PATH, self.log_file)
+        # Use current auto-processing directory for log file
+        base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
+        if not base_dir:
+            print("No valid directory for log file")
+            return
+            
+        log_path = os.path.join(base_dir, self.log_file)
         try:
             with open(log_path, 'r') as f:
                 log_data = json.load(f)
@@ -842,14 +885,20 @@ class DataFedApp(param.Parameterized):
             print(f"Error updating log file: {str(e)}")
 
     def process_new_data(self):
-        """Process new data files in GC directories"""
-        # Use the base directory directly
-        base_dir = FILE_PATH
+        """Process new data files in directories"""
+        # Use the current auto-processing directory
+        base_dir = self.file_path if hasattr(self, 'file_path') and self.file_path else FILE_PATH
         print(f"Base directory: {base_dir}")
         
         try:
+            # Check if base directory is valid
+            if not base_dir or not os.path.exists(base_dir) or not os.path.isdir(base_dir):
+                print(f"Invalid base directory: {base_dir}")
+                self.processing_status = f"Error: Invalid base directory {base_dir}"
+                return
+            
             # Create log file if it doesn't exist
-            log_path = os.path.join(FILE_PATH, self.log_file)
+            log_path = os.path.join(base_dir, self.log_file)
             print(f"Log path: {log_path}")
             
             # Make sure the directory exists
@@ -873,23 +922,22 @@ class DataFedApp(param.Parameterized):
                 self.processed_files_list = processed_dirs
                 print(f"Found {len(processed_dirs)} previously processed directories in log")
                 
-                # Get all GC directories
-                gc_dirs = []
+                # Get all directories in the base directory
+                all_dirs = []
                 for root, dirs, files in os.walk(base_dir):
                     # Skip $RECYCLE.BIN directory and temp_zips directory
                     if os.path.basename(root) in ["$RECYCLE.BIN", "temp_zips"]:
                         print(f"Skipping directory: {root}")
                         continue
-                        
-                    # Check if the current directory starts with 'GC'
-                    if os.path.basename(root).startswith('GC'):
-                        print(f"Found GC directory: {root}")
-                        gc_dirs.append(root)
+                    
+                    # Add the current directory if it's not the base directory itself
+                    if root != base_dir:
+                        all_dirs.append(root)
                 
-                print(f"Found {len(gc_dirs)} GC directories")
+                print(f"Found {len(all_dirs)} directories to process")
                 
                 # Filter out already processed directories
-                new_dirs = [d for d in gc_dirs if os.path.basename(d) not in processed_dirs]
+                new_dirs = [d for d in all_dirs if os.path.basename(d) not in processed_dirs]
                 self.unprocessed_files_list = [os.path.basename(d) for d in new_dirs]
                 
                 print(f"Found {len(new_dirs)} new unprocessed directories")
@@ -943,8 +991,8 @@ class DataFedApp(param.Parameterized):
                     self.current_processing_file = ""
                     print("Completed processing batch of directories")
                 else:
-                    self.processing_status = "No new GC directories found"
-                    print("No new GC directories found in this scan")
+                    self.processing_status = "No new directories found"
+                    print("No new directories found in this scan")
                 
                 # Update the file tracking panes one last time
                 self.update_file_tracking_panes()
@@ -961,14 +1009,7 @@ class DataFedApp(param.Parameterized):
             self.start_auto_button.disabled = False
             self.stop_auto_button.disabled = True
 
-    def update_auto_processing_directory(self, event):
-        """Update the auto-processing directory when the selector changes"""
-        if hasattr(event, 'new') and event.new:
-            new_dir = event.new
-            if os.path.exists(new_dir) and os.path.isdir(new_dir):
-                self.change_auto_processing_directory(new_dir)
-            else:
-                print(f"Invalid directory: {new_dir}")
+    # Removed update_auto_processing_directory method - no longer needed
 
     def change_auto_processing_directory(self, new_directory):
         """Change the auto-processing directory"""
@@ -977,7 +1018,7 @@ class DataFedApp(param.Parameterized):
             print(f"Auto-processing directory changed to: {new_directory}")
             # Update the file selector as well
             self.file_selector.directory = new_directory
-            # Update the auto-processing directory selector
+            # Update the auto-processing directory selector to show current directory
             self.auto_processing_dir_selector.directory = new_directory
         else:
             print(f"Invalid directory: {new_directory}")
@@ -994,3 +1035,135 @@ class DataFedApp(param.Parameterized):
         else:
             print(f"Directory validation failed: {new_directory}")
             return False
+    
+
+    
+    def on_directory_changed(self, event):
+        """Handle directory changes in the auto-processing directory selector"""
+        if event.new:
+            new_dir = event.new
+            print(f"Directory changed to: {new_dir}")
+            
+            if os.path.exists(new_dir) and os.path.isdir(new_dir):
+                self.change_auto_processing_directory(new_dir)
+            else:
+                print(f"Invalid directory: {new_dir}")
+                # Revert to previous valid directory
+                if hasattr(self, 'file_path') and self.file_path:
+                    self.auto_processing_dir_selector.directory = self.file_path
+    
+    def update_directory_selector_display(self):
+        """Update the directory selector to show the current auto-processing directory"""
+        if hasattr(self, 'file_path') and self.file_path:
+            self.auto_processing_dir_selector.directory = self.file_path
+            print(f"Updated directory selector to show: {self.file_path}")
+    
+    def sync_file_selector_with_auto_processing_dir(self):
+        """Sync the main file selector with the current auto-processing directory"""
+        if hasattr(self, 'file_path') and self.file_path:
+            self.file_selector.directory = self.file_path
+            print(f"Synced file selector with auto-processing directory: {self.file_path}")
+    
+    def get_auto_processing_directory_info(self):
+        """Get information about the current auto-processing directory"""
+        if hasattr(self, 'file_path') and self.file_path:
+            try:
+                if os.path.exists(self.file_path):
+                    files = [f for f in os.listdir(self.file_path) if os.path.isfile(os.path.join(self.file_path, f))]
+                    dirs = [f for f in os.listdir(self.file_path) if os.path.isdir(os.path.join(self.file_path, f))]
+                    total_size = sum(os.path.getsize(os.path.join(self.file_path, f)) for f in files)
+                    return {
+                        'path': self.file_path,
+                        'file_count': len(files),
+                        'dir_count': len(dirs),
+                        'total_size': total_size,
+                        'exists': True
+                    }
+                else:
+                    return {'path': self.file_path, 'exists': False}
+            except Exception as e:
+                return {'path': self.file_path, 'error': str(e)}
+        return {'path': None, 'exists': False}
+    
+    def go_to_parent_directory(self, event=None):
+        """Navigate to the parent directory"""
+        if hasattr(self, 'file_path') and self.file_path:
+            parent_dir = os.path.dirname(self.file_path)
+            if parent_dir and parent_dir != self.file_path:
+                self.change_auto_processing_directory(parent_dir)
+                print(f"Navigated to parent directory: {parent_dir}")
+            else:
+                print("Already at root directory")
+        else:
+            print("No directory path set")
+    
+    def go_to_home_directory(self, event=None):
+        """Navigate to the user's home directory"""
+        home_dir = os.path.expanduser("~")
+        if os.path.exists(home_dir) and os.path.isdir(home_dir):
+            self.change_auto_processing_directory(home_dir)
+            print(f"Navigated to home directory: {home_dir}")
+        else:
+            print(f"Home directory not accessible: {home_dir}")
+    
+    def get_breadcrumb_display(self):
+        """Get a breadcrumb display of the current path"""
+        if not hasattr(self, 'file_path') or not self.file_path:
+            return "No path set"
+        
+        try:
+            # Split the path into components
+            path_parts = self.file_path.split(os.sep)
+            if path_parts[0] == '':
+                path_parts[0] = '/'
+            
+            # Create clickable breadcrumb
+            breadcrumb_parts = []
+            current_path = ""
+            
+            for i, part in enumerate(path_parts):
+                if part == '/':
+                    current_path = '/'
+                else:
+                    current_path = os.path.join(current_path, part) if current_path else part
+                
+                if i == 0:
+                    breadcrumb_parts.append(f"`{part}`")
+                else:
+                    breadcrumb_parts.append(f"`{part}`")
+            
+            return " / ".join(breadcrumb_parts)
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def _ensure_valid_directory(self):
+        """Ensure we have a valid directory path, fallback to user's home if needed"""
+        if not hasattr(self, 'file_path') or not self.file_path:
+            # Try to set a sensible default
+            home_dir = os.path.expanduser("~")
+            if os.path.exists(home_dir) and os.path.isdir(home_dir):
+                self.file_path = home_dir
+                print(f"Set default directory to user home: {home_dir}")
+            else:
+                # Fallback to current working directory
+                self.file_path = os.getcwd()
+                print(f"Set default directory to current working directory: {self.file_path}")
+        elif not os.path.exists(self.file_path) or not os.path.isdir(self.file_path):
+            # Current path is invalid, try to find a valid one
+            home_dir = os.path.expanduser("~")
+            if os.path.exists(home_dir) and os.path.isdir(home_dir):
+                self.file_path = home_dir
+                print(f"Invalid directory path, set to user home: {home_dir}")
+            else:
+                self.file_path = os.getcwd()
+                print(f"Invalid directory path, set to current working directory: {self.file_path}")
+    
+    def get_auto_processing_files_count(self):
+        """Get the count of files in the auto-processing directory"""
+        try:
+            if hasattr(self, 'file_path') and os.path.exists(self.file_path):
+                files = [f for f in os.listdir(self.file_path) if os.path.isfile(os.path.join(self.file_path, f))]
+                return len(files)
+            return 0
+        except Exception:
+            return 0
